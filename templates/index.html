@@ -1,0 +1,1973 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="HealthPredict - Healthcare Appointment No-Show Prediction"
+    >
+
+    <title>HealthPredict</title>
+
+
+    <!-- Bootstrap -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+
+    <!-- Font Awesome -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    >
+
+
+    <!-- Inter -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+
+    <!-- Existing CSS -->
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+
+    <style>
+
+        /* =====================================================
+           RUSTIC ROADWAY
+        ===================================================== */
+
+        @font-face {
+
+            font-family: "RusticRoadway";
+
+            src: url(
+                "{{ url_for(
+                    'static',
+                    filename='fonts/RusticRoadway.otf'
+                ) }}"
+            ) format("opentype");
+
+            font-weight: normal;
+
+            font-style: normal;
+
+            font-display: swap;
+        }
+
+
+        /* =====================================================
+           GLOBAL
+        ===================================================== */
+
+        * {
+            box-sizing: border-box;
+        }
+
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+
+        body {
+
+            margin: 0;
+
+            padding: 0;
+
+            font-family: "Inter", sans-serif;
+
+            background: #030405;
+
+            color: white;
+
+            overflow-x: hidden;
+        }
+
+
+        /* =====================================================
+           FULL SCREEN SCROLL EXPERIENCE
+        ===================================================== */
+
+        .experience {
+
+            position: relative;
+
+            height: 500vh;
+
+            background: #030405;
+        }
+
+
+        .experience-sticky {
+
+            position: sticky;
+
+            top: 0;
+
+            width: 100%;
+
+            height: 100vh;
+
+            overflow: hidden;
+
+            background:
+                radial-gradient(
+                    circle at 50% 45%,
+                    #172033 0%,
+                    #0b1019 35%,
+                    #030405 75%
+                );
+        }
+
+
+        /* =====================================================
+           HEART CANVAS
+        ===================================================== */
+
+        #heartCanvas {
+
+            position: absolute;
+
+            inset: 0;
+
+            width: 100vw;
+
+            height: 100vh;
+
+            display: block;
+        }
+
+
+        /* =====================================================
+           NAVBAR
+        ===================================================== */
+
+        .floating-navbar {
+
+            position: fixed;
+
+            top: 0;
+
+            left: 0;
+
+            width: 100%;
+
+            height: 76px;
+
+            z-index: 100;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            padding: 0 42px;
+
+            background:
+                linear-gradient(
+                    to bottom,
+                    rgba(3, 4, 5, 0.82),
+                    rgba(3, 4, 5, 0)
+                );
+
+            pointer-events: none;
+        }
+
+
+        .brand {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 11px;
+
+            color: white;
+
+            text-decoration: none;
+
+            font-size: 1.05rem;
+
+            font-weight: 800;
+
+            pointer-events: auto;
+        }
+
+
+        .brand:hover {
+            color: white;
+        }
+
+
+        .brand-icon {
+
+            width: 38px;
+
+            height: 38px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            border-radius: 12px;
+
+            background:
+                rgba(255,255,255,0.08);
+
+            border:
+                1px solid
+                rgba(255,255,255,0.1);
+
+            color: #65b7ff;
+        }
+
+
+        .brand span {
+            color: #65b7ff;
+        }
+
+
+        .nav-right {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 28px;
+
+            pointer-events: auto;
+        }
+
+
+        .nav-link {
+
+            color:
+                rgba(255,255,255,0.7);
+
+            text-decoration: none;
+
+            font-size: 0.8rem;
+
+            font-weight: 600;
+
+            transition: color 0.2s ease;
+        }
+
+
+        .nav-link:hover {
+            color: white;
+        }
+
+
+        .nav-button {
+
+            padding: 10px 17px;
+
+            border-radius: 30px;
+
+            background: white;
+
+            color: #101828;
+
+            text-decoration: none;
+
+            font-size: 0.76rem;
+
+            font-weight: 800;
+        }
+
+
+        .nav-button:hover {
+
+            color: #101828;
+
+            background: #eaf3ff;
+        }
+
+
+        /* =====================================================
+           LOADER
+        ===================================================== */
+
+        .loader {
+
+            position: absolute;
+
+            inset: 0;
+
+            z-index: 200;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            background: #030405;
+
+            transition:
+                opacity 0.8s ease,
+                visibility 0.8s ease;
+        }
+
+
+        .loader.loaded {
+
+            opacity: 0;
+
+            visibility: hidden;
+
+            pointer-events: none;
+        }
+
+
+        .loader-inner {
+
+            width: min(360px, 80%);
+
+            text-align: center;
+        }
+
+
+        .loader-heart {
+
+            width: 65px;
+
+            height: 65px;
+
+            margin: 0 auto 22px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            border-radius: 20px;
+
+            background:
+                rgba(75,171,247,0.1);
+
+            border:
+                1px solid
+                rgba(75,171,247,0.18);
+
+            color: #65b7ff;
+
+            font-size: 1.5rem;
+        }
+
+
+        .loader h3 {
+
+            margin: 0 0 8px;
+
+            font-size: 1.05rem;
+
+            font-weight: 700;
+        }
+
+
+        .loader p {
+
+            margin: 0 0 22px;
+
+            color:
+                rgba(255,255,255,0.45);
+
+            font-size: 0.75rem;
+        }
+
+
+        .progress-track {
+
+            width: 100%;
+
+            height: 3px;
+
+            overflow: hidden;
+
+            border-radius: 20px;
+
+            background:
+                rgba(255,255,255,0.1);
+        }
+
+
+        .progress-bar {
+
+            width: 0%;
+
+            height: 100%;
+
+            background: #65b7ff;
+
+            transition: width 0.15s ease;
+        }
+
+
+        #progressText {
+
+            display: block;
+
+            margin-top: 10px;
+
+            color:
+                rgba(255,255,255,0.45);
+
+            font-size: 0.7rem;
+        }
+
+
+        /* =====================================================
+           STORY
+        ===================================================== */
+
+        .story {
+
+            position: absolute;
+
+            z-index: 20;
+
+            pointer-events: none;
+
+            opacity: 0;
+
+            transition:
+                opacity 0.7s ease,
+                transform 0.7s ease;
+        }
+
+
+        .story.visible {
+            opacity: 1;
+        }
+
+
+        .story-left {
+
+            left: 7vw;
+
+            top: 50%;
+
+            max-width: 400px;
+
+            transform:
+                translateY(
+                    calc(-50% + 30px)
+                );
+        }
+
+
+        .story-left.visible {
+
+            transform:
+                translateY(-50%);
+        }
+
+
+        .story-right {
+
+            right: 7vw;
+
+            top: 50%;
+
+            max-width: 400px;
+
+            text-align: right;
+
+            transform:
+                translateY(
+                    calc(-50% + 30px)
+                );
+        }
+
+
+        .story-right.visible {
+
+            transform:
+                translateY(-50%);
+        }
+
+
+        .story-center {
+
+            left: 50%;
+
+            top: 50%;
+
+            width: min(620px, 90%);
+
+            text-align: center;
+
+            transform:
+                translate(
+                    -50%,
+                    calc(-50% + 30px)
+                );
+        }
+
+
+        .story-center.visible {
+
+            transform:
+                translate(-50%, -50%);
+        }
+
+
+        /* =====================================================
+           EYEBROW
+        ===================================================== */
+
+        .eyebrow {
+
+            display: inline-block;
+
+            margin-bottom: 15px;
+
+            color: #65b7ff;
+
+            font-family: "Inter", sans-serif;
+
+            font-size: 0.65rem;
+
+            font-weight: 800;
+
+            letter-spacing: 2.5px;
+        }
+
+
+        /* =====================================================
+           RUSTIC ROADWAY HEADINGS
+        ===================================================== */
+
+        .story h1,
+        .story h2 {
+
+            font-family:
+                "RusticRoadway",
+                sans-serif;
+
+            font-weight: normal;
+
+            font-style: normal;
+
+            color: white;
+
+            text-rendering: geometricPrecision;
+        }
+
+
+        .story h1 {
+
+            margin: 0 0 18px;
+
+            font-size:
+                clamp(
+                    3.2rem,
+                    6vw,
+                    6rem
+                );
+
+            line-height: 0.92;
+
+            letter-spacing: 1px;
+        }
+
+
+        .story h2 {
+
+            margin: 0 0 18px;
+
+            font-size:
+                clamp(
+                    2.8rem,
+                    5vw,
+                    5rem
+                );
+
+            line-height: 0.92;
+
+            letter-spacing: 1px;
+        }
+
+
+        /* =====================================================
+           DESCRIPTION
+        ===================================================== */
+
+        .story p {
+
+            margin: 0;
+
+            color:
+                rgba(255,255,255,0.62);
+
+            font-family: "Inter", sans-serif;
+
+            font-size: 0.9rem;
+
+            line-height: 1.8;
+        }
+
+
+        /* =====================================================
+           FINAL BUTTON
+        ===================================================== */
+
+        .start-button {
+
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 10px;
+
+            margin-top: 26px;
+
+            padding: 13px 21px;
+
+            border-radius: 40px;
+
+            background: white;
+
+            color: #101828;
+
+            text-decoration: none;
+
+            font-family: "Inter", sans-serif;
+
+            font-size: 0.8rem;
+
+            font-weight: 800;
+
+            pointer-events: auto;
+
+            transition:
+                transform 0.2s ease,
+                background 0.2s ease;
+        }
+
+
+        .start-button:hover {
+
+            color: #101828;
+
+            background: #eaf3ff;
+
+            transform:
+                translateY(-2px);
+        }
+
+
+        /* =====================================================
+           SCROLL INDICATOR
+        ===================================================== */
+
+        .scroll-indicator {
+
+            position: absolute;
+
+            z-index: 30;
+
+            left: 50%;
+
+            bottom: 30px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            align-items: center;
+
+            gap: 8px;
+
+            color:
+                rgba(255,255,255,0.55);
+
+            font-family: "Inter", sans-serif;
+
+            font-size: 0.65rem;
+
+            letter-spacing: 1.5px;
+
+            transform:
+                translateX(-50%);
+
+            transition: opacity 0.4s ease;
+        }
+
+
+        .scroll-indicator.hidden {
+            opacity: 0;
+        }
+
+
+        .scroll-arrow {
+
+            animation:
+                bounce 1.5s infinite;
+        }
+
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform:
+                    translateY(0);
+            }
+
+            50% {
+                transform:
+                    translateY(7px);
+            }
+        }
+
+
+        /* =====================================================
+           PREDICTION
+        ===================================================== */
+
+        #prediction {
+
+            position: relative;
+
+            z-index: 10;
+
+            min-height: 100vh;
+
+            padding: 120px 20px;
+
+            background: #f7f9fc;
+
+            color: #101828;
+        }
+
+
+        .prediction-container {
+
+            width:
+                min(
+                    1000px,
+                    100%
+                );
+
+            margin: auto;
+        }
+
+
+        .prediction-heading {
+
+            margin-bottom: 45px;
+
+            text-align: center;
+        }
+
+
+        .prediction-heading small {
+
+            color: #0d6efd;
+
+            font-size: 0.68rem;
+
+            font-weight: 800;
+
+            letter-spacing: 2px;
+        }
+
+
+        .prediction-heading h2 {
+
+            margin: 12px 0;
+
+            font-size:
+                clamp(
+                    2rem,
+                    4vw,
+                    3.4rem
+                );
+
+            font-weight: 800;
+
+            letter-spacing: -2px;
+        }
+
+
+        .prediction-heading p {
+
+            max-width: 650px;
+
+            margin: auto;
+
+            color: #667085;
+
+            line-height: 1.7;
+        }
+
+
+        .prediction-card {
+
+            padding:
+                clamp(
+                    25px,
+                    5vw,
+                    45px
+                );
+
+            border:
+                1px solid #e4eaf2;
+
+            border-radius: 24px;
+
+            background: white;
+
+            box-shadow:
+                0 25px 70px
+                rgba(
+                    16,
+                    24,
+                    40,
+                    0.08
+                );
+        }
+
+
+        .form-title {
+
+            margin-bottom: 25px;
+
+            font-size: 1rem;
+
+            font-weight: 800;
+        }
+
+
+        .form-label {
+
+            margin-bottom: 7px;
+
+            color: #344054;
+
+            font-size: 0.75rem;
+
+            font-weight: 700;
+        }
+
+
+        .form-control,
+        .form-select {
+
+            min-height: 48px;
+
+            border:
+                1px solid #d0d5dd;
+
+            border-radius: 10px;
+
+            font-size: 0.82rem;
+
+            box-shadow: none !important;
+        }
+
+
+        .form-control:focus,
+        .form-select:focus {
+
+            border-color: #0d6efd;
+
+            box-shadow:
+                0 0 0 3px
+                rgba(
+                    13,
+                    110,
+                    253,
+                    0.1
+                ) !important;
+        }
+
+
+        .submit-button {
+
+            width: 100%;
+
+            min-height: 54px;
+
+            margin-top: 30px;
+
+            border: 0;
+
+            border-radius: 12px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #0d6efd,
+                    #0954b8
+                );
+
+            color: white;
+
+            font-family: "Inter", sans-serif;
+
+            font-weight: 800;
+        }
+
+
+        .submit-button:hover {
+
+            color: white;
+
+            opacity: 0.94;
+        }
+
+
+        .disclaimer {
+
+            margin-top: 15px;
+
+            color: #98a2b3;
+
+            font-size: 0.68rem;
+
+            text-align: center;
+        }
+
+
+        /* =====================================================
+           MOBILE
+        ===================================================== */
+
+        @media (max-width: 768px) {
+
+            .floating-navbar {
+
+                height: 65px;
+
+                padding: 0 18px;
+            }
+
+
+            .nav-right {
+                gap: 12px;
+            }
+
+
+            .nav-link {
+                display: none;
+            }
+
+
+            .nav-button {
+                padding: 8px 13px;
+            }
+
+
+            .story-left,
+            .story-right {
+
+                left: 50%;
+
+                right: auto;
+
+                top: auto;
+
+                bottom: 12%;
+
+                width: 90%;
+
+                max-width: 440px;
+
+                text-align: center;
+
+                transform:
+                    translate(
+                        -50%,
+                        30px
+                    );
+            }
+
+
+            .story-left.visible,
+            .story-right.visible {
+
+                transform:
+                    translate(
+                        -50%,
+                        0
+                    );
+            }
+
+
+            .story h1 {
+
+                font-size:
+                    clamp(
+                        3rem,
+                        15vw,
+                        4.8rem
+                    );
+            }
+
+
+            .story h2 {
+
+                font-size:
+                    clamp(
+                        2.6rem,
+                        13vw,
+                        4rem
+                    );
+            }
+
+
+            .story p {
+                font-size: 0.78rem;
+            }
+
+
+            #prediction {
+                padding: 80px 16px;
+            }
+
+
+            .prediction-card {
+
+                padding: 22px;
+
+                border-radius: 18px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+    <!-- =====================================================
+         FLOATING NAVBAR
+         NO BLUE SCROLL PROGRESS BAR
+    ====================================================== -->
+
+    <nav class="floating-navbar">
+
+        <a
+            href="{{ url_for('home') }}"
+            class="brand"
+        >
+
+            <div class="brand-icon">
+
+                <i class="fa-solid fa-heart-pulse"></i>
+
+            </div>
+
+            Health<span>Predict</span>
+
+        </a>
+
+
+        <div class="nav-right">
+
+            <a
+                href="{{ url_for('about') }}"
+                class="nav-link"
+            >
+                About
+            </a>
+
+
+            <a
+                href="#prediction"
+                class="nav-button"
+            >
+                Predict Risk
+            </a>
+
+        </div>
+
+    </nav>
+
+
+
+    <!-- =====================================================
+         FULL SCREEN EXPERIENCE
+    ====================================================== -->
+
+    <section
+        class="experience"
+        id="experience"
+    >
+
+        <div class="experience-sticky">
+
+
+            <!-- HEART -->
+            <canvas id="heartCanvas"></canvas>
+
+
+
+            <!-- LOADER -->
+
+            <div
+                id="heartLoader"
+                class="loader"
+            >
+
+                <div class="loader-inner">
+
+                    <div class="loader-heart">
+
+                        <i class="fa-solid fa-heart-pulse"></i>
+
+                    </div>
+
+
+                    <h3>
+                        Preparing HealthPredict
+                    </h3>
+
+
+                    <p>
+                        Preparing the interactive experience...
+                    </p>
+
+
+                    <div class="progress-track">
+
+                        <div
+                            id="heartProgressBar"
+                            class="progress-bar"
+                        ></div>
+
+                    </div>
+
+
+                    <span id="progressText">
+                        0%
+                    </span>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- STORY 1 -->
+
+            <div
+                id="story1"
+                class="story story-left"
+            >
+
+                <span class="eyebrow">
+                    HEALTHCARE ANALYTICS
+                </span>
+
+
+                <h1>
+                    Every appointment
+                    tells a story.
+                </h1>
+
+
+                <p>
+                    A scheduled appointment represents a
+                    patient, a time, and a decision to attend.
+                </p>
+
+            </div>
+
+
+
+            <!-- STORY 2 -->
+
+            <div
+                id="story2"
+                class="story story-right"
+            >
+
+                <span class="eyebrow">
+                    UNDERSTAND THE RISK
+                </span>
+
+
+                <h2>
+                    Look beyond
+                    the appointment.
+                </h2>
+
+
+                <p>
+                    Historical appointment information can
+                    reveal patterns associated with missed
+                    appointments.
+                </p>
+
+            </div>
+
+
+
+            <!-- STORY 3 -->
+
+            <div
+                id="story3"
+                class="story story-left"
+            >
+
+                <span class="eyebrow">
+                    MACHINE LEARNING
+                </span>
+
+
+                <h2>
+                    Patterns become
+                    predictions.
+                </h2>
+
+
+                <p>
+                    HealthPredict processes appointment
+                    information through a trained machine
+                    learning model.
+                </p>
+
+            </div>
+
+
+
+            <!-- STORY 4 -->
+
+            <div
+                id="story4"
+                class="story story-center"
+            >
+
+                <span class="eyebrow">
+                    HEALTHPREDICT
+                </span>
+
+
+                <h2>
+                    Predict before
+                    it happens.
+                </h2>
+
+
+                <p>
+                    Estimate the probability of a missed
+                    appointment and identify potentially
+                    higher-risk appointments.
+                </p>
+
+
+                <a
+                    href="#prediction"
+                    class="start-button"
+                >
+
+                    Start Prediction
+
+                    <i class="fa-solid fa-arrow-down"></i>
+
+                </a>
+
+            </div>
+
+
+
+            <!-- SCROLL HINT -->
+
+            <div
+                id="scrollHint"
+                class="scroll-indicator"
+            >
+
+                <span>
+                    SCROLL TO EXPLORE
+                </span>
+
+
+                <i
+                    class="fa-solid fa-chevron-down scroll-arrow"
+                ></i>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- =====================================================
+         PREDICTION SECTION
+    ====================================================== -->
+
+    <section id="prediction">
+
+        <div class="prediction-container">
+
+
+            <div class="prediction-heading">
+
+                <small>
+                    APPOINTMENT RISK ANALYSIS
+                </small>
+
+
+                <h2>
+                    Analyze an Appointment
+                </h2>
+
+
+                <p>
+                    Enter the available patient and appointment
+                    information. HealthPredict will estimate the
+                    probability of a no-show.
+                </p>
+
+            </div>
+
+
+
+            <div class="prediction-card">
+
+                <form
+                    action="{{ url_for('predict') }}"
+                    method="POST"
+                    id="predictionForm"
+                >
+
+                    <h3 class="form-title">
+                        Patient Information
+                    </h3>
+
+
+                    <div class="row g-4">
+
+
+                        <!-- Gender -->
+
+                        <div class="col-md-4">
+
+                            <label
+                                class="form-label"
+                                for="Gender"
+                            >
+                                Gender
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="Gender"
+                                id="Gender"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select gender
+                                </option>
+
+
+                                <option value="F">
+                                    Female
+                                </option>
+
+
+                                <option value="M">
+                                    Male
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- Age -->
+
+                        <div class="col-md-4">
+
+                            <label
+                                class="form-label"
+                                for="Age"
+                            >
+                                Age
+                            </label>
+
+
+                            <input
+                                type="number"
+                                class="form-control"
+                                name="Age"
+                                id="Age"
+                                min="0"
+                                max="120"
+                                placeholder="e.g. 45"
+                                required
+                            >
+
+                        </div>
+
+
+
+                        <!-- Neighbourhood -->
+
+                        <div class="col-md-4">
+
+                            <label
+                                class="form-label"
+                                for="Neighbourhood"
+                            >
+                                Neighbourhood
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="Neighbourhood"
+                                id="Neighbourhood"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select neighbourhood
+                                </option>
+
+
+                                {% for neighbourhood in neighbourhoods %}
+
+                                <option
+                                    value="{{ neighbourhood }}"
+                                >
+                                    {{ neighbourhood }}
+                                </option>
+
+                                {% endfor %}
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- Scholarship -->
+
+                        <div class="col-md-3 col-sm-6">
+
+                            <label
+                                class="form-label"
+                                for="Scholarship"
+                            >
+                                Scholarship
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="Scholarship"
+                                id="Scholarship"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select
+                                </option>
+
+
+                                <option value="0">
+                                    No
+                                </option>
+
+
+                                <option value="1">
+                                    Yes
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- Hypertension -->
+
+                        <div class="col-md-3 col-sm-6">
+
+                            <label
+                                class="form-label"
+                                for="Hipertension"
+                            >
+                                Hypertension
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="Hipertension"
+                                id="Hipertension"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select
+                                </option>
+
+
+                                <option value="0">
+                                    No
+                                </option>
+
+
+                                <option value="1">
+                                    Yes
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- Diabetes -->
+
+                        <div class="col-md-3 col-sm-6">
+
+                            <label
+                                class="form-label"
+                                for="Diabetes"
+                            >
+                                Diabetes
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="Diabetes"
+                                id="Diabetes"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select
+                                </option>
+
+
+                                <option value="0">
+                                    No
+                                </option>
+
+
+                                <option value="1">
+                                    Yes
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- Alcoholism -->
+
+                        <div class="col-md-3 col-sm-6">
+
+                            <label
+                                class="form-label"
+                                for="Alcoholism"
+                            >
+                                Alcoholism
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="Alcoholism"
+                                id="Alcoholism"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select
+                                </option>
+
+
+                                <option value="0">
+                                    No
+                                </option>
+
+
+                                <option value="1">
+                                    Yes
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- Handicap -->
+
+                        <div class="col-md-4 col-sm-6">
+
+                            <label
+                                class="form-label"
+                                for="Handcap"
+                            >
+                                Handicap
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="Handcap"
+                                id="Handcap"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select
+                                </option>
+
+
+                                <option value="0">
+                                    No
+                                </option>
+
+
+                                <option value="1">
+                                    Yes
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- SMS -->
+
+                        <div class="col-md-4 col-sm-6">
+
+                            <label
+                                class="form-label"
+                                for="SMS_received"
+                            >
+                                SMS Received
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="SMS_received"
+                                id="SMS_received"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select
+                                </option>
+
+
+                                <option value="0">
+                                    No
+                                </option>
+
+
+                                <option value="1">
+                                    Yes
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- Lead Time -->
+
+                        <div class="col-md-4">
+
+                            <label
+                                class="form-label"
+                                for="LeadTime"
+                            >
+                                Lead Time
+                            </label>
+
+
+                            <input
+                                type="number"
+                                class="form-control"
+                                name="LeadTime"
+                                id="LeadTime"
+                                min="0"
+                                placeholder="Days"
+                                required
+                            >
+
+                        </div>
+
+
+
+                        <!-- Weekday -->
+
+                        <div class="col-md-6">
+
+                            <label
+                                class="form-label"
+                                for="AppointmentWeekday"
+                            >
+                                Appointment Weekday
+                            </label>
+
+
+                            <select
+                                class="form-select"
+                                name="AppointmentWeekday"
+                                id="AppointmentWeekday"
+                                required
+                            >
+
+                                <option
+                                    value=""
+                                    selected
+                                    disabled
+                                >
+                                    Select weekday
+                                </option>
+
+
+                                <option value="Monday">
+                                    Monday
+                                </option>
+
+
+                                <option value="Tuesday">
+                                    Tuesday
+                                </option>
+
+
+                                <option value="Wednesday">
+                                    Wednesday
+                                </option>
+
+
+                                <option value="Thursday">
+                                    Thursday
+                                </option>
+
+
+                                <option value="Friday">
+                                    Friday
+                                </option>
+
+
+                                <option value="Saturday">
+                                    Saturday
+                                </option>
+
+
+                                <option value="Sunday">
+                                    Sunday
+                                </option>
+
+                            </select>
+
+                        </div>
+
+
+                    </div>
+
+
+
+                    <!-- Submit -->
+
+                    <button
+                        type="submit"
+                        class="submit-button"
+                        id="submitButton"
+                    >
+
+                        <span id="submitNormal">
+
+                            <i
+                                class="fa-solid fa-wand-magic-sparkles me-2"
+                            ></i>
+
+                            Predict No-Show Risk
+
+                        </span>
+
+
+                        <span
+                            id="submitLoading"
+                            style="display:none;"
+                        >
+
+                            <span
+                                class="spinner-border spinner-border-sm me-2"
+                            ></span>
+
+                            Analyzing...
+
+                        </span>
+
+                    </button>
+
+
+                    <p class="disclaimer">
+
+                        This prediction is an estimated probability
+                        and should support, not replace, professional
+                        judgment.
+
+                    </p>
+
+                </form>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- Bootstrap JS -->
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    ></script>
+
+
+    <!-- Existing JS -->
+
+    <script
+        src="{{ url_for('static', filename='js/script.js') }}"
+    ></script>
+
+
+    <!-- Heart animation -->
+
+    <script
+        src="{{ url_for('static', filename='js/heart-scroll.js') }}"
+    ></script>
+
+
+    <!-- Form loading -->
+
+    <script>
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            function () {
+
+                const form =
+                    document.getElementById(
+                        "predictionForm"
+                    );
+
+                const button =
+                    document.getElementById(
+                        "submitButton"
+                    );
+
+                const normal =
+                    document.getElementById(
+                        "submitNormal"
+                    );
+
+                const loading =
+                    document.getElementById(
+                        "submitLoading"
+                    );
+
+
+                if (!form) {
+                    return;
+                }
+
+
+                form.addEventListener(
+                    "submit",
+                    function () {
+
+                        button.disabled = true;
+
+                        normal.style.display =
+                            "none";
+
+                        loading.style.display =
+                            "inline";
+
+                    }
+                );
+
+            }
+        );
+
+    </script>
+
+
+</body>
+
+</html>
