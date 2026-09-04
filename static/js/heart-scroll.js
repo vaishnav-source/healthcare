@@ -15,14 +15,17 @@
     const FRAME_PREFIX =
         "ezgif-frame-";
 
+    const LOAD_CONCURRENCY = 8;
 
     /*
-     * Number of images allowed to load at the same time.
+     * sessionStorage key.
      *
-     * This prevents the browser from requesting all
-     * 240 images simultaneously.
+     * Once the Home animation has successfully loaded,
+     * this key tells the next Home visit to skip the loader.
      */
-    const LOAD_CONCURRENCY = 8;
+
+    const LOADING_SESSION_KEY =
+        "healthpredict_heart_loaded";
 
 
     /* =====================================================
@@ -81,13 +84,6 @@
        STATE
     ===================================================== */
 
-    /*
-     * Fixed-size array.
-     *
-     * This is important because frame 1 goes into
-     * frames[0], frame 2 into frames[1], etc.
-     */
-
     const frames =
         new Array(TOTAL_FRAMES);
 
@@ -108,13 +104,53 @@
 
 
     /* =====================================================
-       SCROLL LOCK
+       CHECK FIRST / RETURN VISIT
     ===================================================== */
 
-    /*
-     * Prevent the user from scrolling while the
-     * heart animation is loading.
-     */
+    function hasLoadedBefore() {
+
+        try {
+
+            return (
+                sessionStorage.getItem(
+                    LOADING_SESSION_KEY
+                ) === "true"
+            );
+
+        } catch (error) {
+
+            /*
+             * If sessionStorage is unavailable,
+             * simply show the loader normally.
+             */
+
+            return false;
+        }
+    }
+
+
+    function markAsLoaded() {
+
+        try {
+
+            sessionStorage.setItem(
+                LOADING_SESSION_KEY,
+                "true"
+            );
+
+        } catch (error) {
+
+            /*
+             * Ignore storage errors.
+             */
+
+        }
+    }
+
+
+    /* =====================================================
+       SCROLL LOCK
+    ===================================================== */
 
     function lockPageScroll() {
 
@@ -126,9 +162,6 @@
             "loading-lock"
         );
 
-        /*
-         * Prevent keyboard scrolling.
-         */
 
         window.addEventListener(
             "keydown",
@@ -140,10 +173,6 @@
     }
 
 
-    /*
-     * Allow scrolling again after loading.
-     */
-
     function unlockPageScroll() {
 
         document.documentElement.classList.remove(
@@ -154,24 +183,13 @@
             "loading-lock"
         );
 
+
         window.removeEventListener(
             "keydown",
             preventScrollKeys
         );
     }
 
-
-    /*
-     * Prevent keyboard keys such as:
-     *
-     * ArrowUp
-     * ArrowDown
-     * PageUp
-     * PageDown
-     * Home
-     * End
-     * Space
-     */
 
     function preventScrollKeys(event) {
 
@@ -191,18 +209,10 @@
         if (
             scrollKeys.includes(event.key)
         ) {
+
             event.preventDefault();
         }
     }
-
-
-    /*
-     * Lock immediately.
-     *
-     * This happens before image loading starts.
-     */
-
-    lockPageScroll();
 
 
     /* =====================================================
@@ -233,12 +243,6 @@
 
 
     function resizeCanvas() {
-
-        /*
-         * Limit DPR.
-         *
-         * Very high DPR can make canvas drawing expensive.
-         */
 
         const dpr =
             Math.min(
@@ -289,13 +293,6 @@
     }
 
 
-    /*
-     * Debounce resize.
-     *
-     * This prevents many canvas recalculations when
-     * the browser is continuously being resized.
-     */
-
     function handleResize() {
 
         clearTimeout(
@@ -321,10 +318,6 @@
 
     function drawFrame(index) {
 
-        /*
-         * Make sure index is valid.
-         */
-
         if (
             index < 0 ||
             index >= TOTAL_FRAMES
@@ -338,10 +331,8 @@
 
 
         /*
-         * If requested frame hasn't loaded yet,
-         * find the closest previously loaded frame.
-         *
-         * This prevents the animation from becoming blank.
+         * If the requested frame isn't ready,
+         * use the closest previous loaded frame.
          */
 
         if (
@@ -371,11 +362,6 @@
         }
 
 
-        /*
-         * If no frame is available yet,
-         * don't draw anything.
-         */
-
         if (
             !image ||
             !image.complete ||
@@ -386,7 +372,7 @@
 
 
         /*
-         * Don't redraw exactly the same frame.
+         * Don't redraw the same frame.
          */
 
         if (
@@ -426,9 +412,9 @@
         let drawHeight;
 
 
-        /* =================================================
-           COVER
-        ================================================= */
+        /*
+         * COVER
+         */
 
         if (
             imageRatio > screenRatio
@@ -481,7 +467,7 @@
 
 
     /* =====================================================
-       UPDATE LOADING PROGRESS
+       UPDATE PROGRESS
     ===================================================== */
 
     function updateLoadingProgress() {
@@ -527,24 +513,12 @@
                     "async";
 
 
-                /*
-                 * Tell the browser this is an eager
-                 * image because we need it for animation.
-                 */
-
                 image.loading =
                     "eager";
 
 
                 image.onload =
                     async function () {
-
-                        /*
-                         * Decode the image when possible.
-                         *
-                         * This helps reduce the chance of
-                         * decode work happening during scrolling.
-                         */
 
                         if (
                             typeof image.decode ===
@@ -558,8 +532,8 @@
                             } catch (error) {
 
                                 /*
-                                 * Decode failure does not
-                                 * mean the image cannot be drawn.
+                                 * Continue even if decode
+                                 * isn't available.
                                  */
 
                             }
@@ -576,9 +550,7 @@
                         updateLoadingProgress();
 
 
-                        resolve(
-                            true
-                        );
+                        resolve(true);
                     };
 
 
@@ -591,20 +563,13 @@
                         );
 
 
-                        /*
-                         * Keep the loader moving even if
-                         * one image fails.
-                         */
-
                         loadedFrames++;
 
 
                         updateLoadingProgress();
 
 
-                        resolve(
-                            false
-                        );
+                        resolve(false);
                     };
 
 
@@ -617,30 +582,17 @@
 
     /* =====================================================
        PRELOAD ALL FRAMES
-       LIMITED CONCURRENCY
     ===================================================== */
 
     async function preloadFrames() {
-
-        /*
-         * Each worker loads one frame at a time.
-         */
 
         async function worker() {
 
             while (true) {
 
-                /*
-                 * Get the next frame number.
-                 */
-
                 const index =
                     nextFrameToLoad++;
 
-
-                /*
-                 * Stop when all frames have been assigned.
-                 */
 
                 if (
                     index >= TOTAL_FRAMES
@@ -655,10 +607,6 @@
             }
         }
 
-
-        /*
-         * Create limited number of workers.
-         */
 
         const workers = [];
 
@@ -681,10 +629,6 @@
             );
         }
 
-
-        /*
-         * Wait until every worker has finished.
-         */
 
         await Promise.all(
             workers
@@ -744,19 +688,10 @@
             getScrollProgress();
 
 
-        /*
-         * Convert scroll position into
-         * one of the 240 frames.
-         */
-
         targetFrame =
             progress *
             (TOTAL_FRAMES - 1);
 
-
-        /*
-         * Hide scroll hint after scrolling starts.
-         */
 
         if (scrollHint) {
 
@@ -777,18 +712,10 @@
         }
 
 
-        /*
-         * Update story.
-         */
-
         updateStory(
             progress
         );
 
-
-        /*
-         * Start animation.
-         */
 
         if (
             !animationRunning
@@ -806,7 +733,7 @@
 
 
     /* =====================================================
-       SMOOTH FRAME MOVEMENT
+       SMOOTH FRAME ANIMATION
     ===================================================== */
 
     function animateFrame() {
@@ -815,10 +742,6 @@
             targetFrame -
             currentFrame;
 
-
-        /*
-         * Smooth interpolation.
-         */
 
         currentFrame +=
             difference *
@@ -900,10 +823,6 @@
 
 
     function updateStory(progress) {
-
-        /*
-         * Avoid unnecessary DOM updates.
-         */
 
         if (
             Math.abs(
@@ -1003,10 +922,7 @@
         function () {
 
             /*
-             * Safety check:
-             *
-             * If the loader is still active,
-             * don't process scrolling.
+             * Ignore scroll events while loading.
              */
 
             if (
@@ -1045,7 +961,7 @@
 
 
     /* =====================================================
-       RESIZE EVENT
+       RESIZE
     ===================================================== */
 
     window.addEventListener(
@@ -1055,25 +971,140 @@
 
 
     /* =====================================================
+       SHOW PAGE WITHOUT LOADER
+    ===================================================== */
+
+    function skipLoader() {
+
+        /*
+         * Hide loader immediately.
+         */
+
+        if (loader) {
+
+            loader.classList.add(
+                "loaded"
+            );
+        }
+
+
+        /*
+         * Unlock scrolling immediately.
+         */
+
+        unlockPageScroll();
+
+
+        /*
+         * Show first story.
+         */
+
+        hideStories();
+
+
+        if (story1) {
+
+            story1.classList.add(
+                "visible"
+            );
+        }
+
+
+        /*
+         * Set initial scroll state.
+         */
+
+        updateScroll();
+    }
+
+
+    /* =====================================================
        INITIALIZE
     ===================================================== */
 
     async function initialize() {
 
         /*
-         * IMPORTANT:
-         *
-         * Lock scrolling before doing anything else.
-         */
-
-        lockPageScroll();
-
-
-        /*
-         * Prepare canvas.
+         * Prepare canvas first.
          */
 
         resizeCanvas();
+
+
+        /* =================================================
+           RETURNING VISITOR
+        ================================================= */
+
+        if (
+            hasLoadedBefore()
+        ) {
+
+            /*
+             * We already loaded the animation during
+             * this browser session.
+             *
+             * Don't show the loading animation.
+             */
+
+            skipLoader();
+
+
+            /*
+             * IMPORTANT:
+             *
+             * We still need to load the images because
+             * a full page navigation destroys the previous
+             * JavaScript memory.
+             *
+             * Load them in the background.
+             */
+
+            loadedFrames = 0;
+
+            nextFrameToLoad = 0;
+
+            lastDrawnFrame = -1;
+
+
+            /*
+             * Start background loading.
+             *
+             * The user doesn't have to wait for the loader.
+             */
+
+            preloadFrames()
+                .then(
+                    function () {
+
+                        /*
+                         * Redraw the current frame once
+                         * the background loading finishes.
+                         */
+
+                        lastDrawnFrame = -1;
+
+                        drawFrame(
+                            Math.round(
+                                currentFrame
+                            )
+                        );
+                    }
+                );
+
+
+            return;
+        }
+
+
+        /* =================================================
+           FIRST VISIT
+        ================================================= */
+
+        /*
+         * Lock scrolling while the first load happens.
+         */
+
+        lockPageScroll();
 
 
         /*
@@ -1103,9 +1134,6 @@
 
         /*
          * Load all 240 frames.
-         *
-         * Loading happens with limited concurrency,
-         * rather than requesting all 240 at once.
          */
 
         await preloadFrames();
@@ -1126,7 +1154,7 @@
 
 
         /* =================================================
-           SHOW FIRST STORY
+           FIRST STORY
         ================================================= */
 
         hideStories();
@@ -1148,7 +1176,7 @@
 
 
         /* =================================================
-           REMOVE LOADING SCREEN
+           REMOVE LOADER
         ================================================= */
 
         if (loader) {
@@ -1160,10 +1188,15 @@
 
 
         /*
-         * Wait for the loader's fade-out animation.
-         *
-         * Your existing loader uses an approximately
-         * 0.8 second transition.
+         * Remember that this browser session has already
+         * completed the initial heart loading.
+         */
+
+        markAsLoaded();
+
+
+        /*
+         * Wait for loader fade-out before unlocking.
          */
 
         setTimeout(
@@ -1179,7 +1212,7 @@
 
     /* =====================================================
        START
-    ================================================= */
+    ===================================================== */
 
     initialize();
 
