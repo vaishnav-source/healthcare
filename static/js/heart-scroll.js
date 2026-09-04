@@ -9,11 +9,13 @@
 
     const TOTAL_FRAMES = 240;
 
-    const FRAME_FOLDER =
-        "/static/frames/";
+    const FRAME_FOLDER = "/static/frames/";
 
-    const FRAME_PREFIX =
-        "ezgif-frame-";
+    const FRAME_PREFIX = "ezgif-frame-";
+
+    // Number of images loaded simultaneously.
+    // 6-8 is usually a good balance.
+    const LOAD_CONCURRENCY = 8;
 
 
     /* =====================================================
@@ -38,7 +40,6 @@
     const scrollHint =
         document.getElementById("scrollHint");
 
-
     const story1 =
         document.getElementById("story1");
 
@@ -52,6 +53,10 @@
         document.getElementById("story4");
 
 
+    /* =====================================================
+       SAFETY CHECK
+    ===================================================== */
+
     if (
         !experience ||
         !canvas
@@ -61,14 +66,21 @@
 
 
     const ctx =
-        canvas.getContext("2d");
+        canvas.getContext(
+            "2d",
+            {
+                alpha: true,
+                desynchronized: true
+            }
+        );
 
 
     /* =====================================================
        STATE
     ===================================================== */
 
-    const frames = [];
+    const frames =
+        new Array(TOTAL_FRAMES);
 
     let loadedFrames = 0;
 
@@ -79,6 +91,10 @@
     let animationRunning = false;
 
     let lastProgress = -1;
+
+    let resizeTimer = null;
+
+    let loadingFinished = false;
 
 
     /* =====================================================
@@ -97,6 +113,38 @@
             padded +
             ".png"
         );
+    }
+
+
+    /* =====================================================
+       UPDATE LOADER
+    ===================================================== */
+
+    function updateLoaderProgress() {
+
+        const percentage =
+            Math.round(
+                (
+                    loadedFrames /
+                    TOTAL_FRAMES
+                ) * 100
+            );
+
+
+        if (progressBar) {
+
+            progressBar.style.width =
+                percentage + "%";
+
+        }
+
+
+        if (progressText) {
+
+            progressText.textContent =
+                percentage + "%";
+
+        }
 
     }
 
@@ -162,16 +210,67 @@
 
     function drawFrame(index) {
 
-        const image =
+        if (
+            index < 0 ||
+            index >= TOTAL_FRAMES
+        ) {
+            return;
+        }
+
+
+        let image =
             frames[index];
 
+
+        /*
+         * If requested frame has not loaded yet,
+         * use the nearest available frame.
+         */
 
         if (
             !image ||
             !image.complete ||
             !image.naturalWidth
         ) {
-            return;
+
+            let fallbackIndex = index;
+
+
+            /*
+             * Search backwards first.
+             */
+
+            while (
+                fallbackIndex > 0 &&
+                (
+                    !frames[fallbackIndex] ||
+                    !frames[fallbackIndex].complete ||
+                    !frames[fallbackIndex].naturalWidth
+                )
+            ) {
+
+                fallbackIndex--;
+
+            }
+
+
+            image =
+                frames[fallbackIndex];
+
+
+            /*
+             * If nothing is available yet,
+             * don't draw anything.
+             */
+
+            if (
+                !image ||
+                !image.complete ||
+                !image.naturalWidth
+            ) {
+                return;
+            }
+
         }
 
 
@@ -193,7 +292,6 @@
         const imageRatio =
             image.naturalWidth /
             image.naturalHeight;
-
 
         const screenRatio =
             width /
@@ -258,134 +356,170 @@
 
 
     /* =====================================================
-       PRELOAD ALL 240 FRAMES
+       LOAD SINGLE FRAME
     ===================================================== */
 
-    function preloadFrames() {
+    function loadFrame(index) {
 
         return new Promise(
             function (resolve) {
 
-                for (
-                    let i = 1;
-                    i <= TOTAL_FRAMES;
-                    i++
-                ) {
-
-                    const image =
-                        new Image();
+                const image =
+                    new Image();
 
 
-                    image.decoding =
-                        "async";
+                image.decoding =
+                    "async";
+
+                image.loading =
+                    "eager";
 
 
-                    image.src =
-                        framePath(i);
+                let completed =
+                    false;
 
 
-                    image.onload =
-                        function () {
+                function finish(success) {
 
-                            loadedFrames++;
+                    if (completed) {
+                        return;
+                    }
 
-
-                            const percentage =
-                                Math.round(
-                                    (
-                                        loadedFrames /
-                                        TOTAL_FRAMES
-                                    ) * 100
-                                );
+                    completed = true;
 
 
-                            if (progressBar) {
+                    if (success) {
 
-                                progressBar.style.width =
-                                    percentage + "%";
+                        frames[index] =
+                            image;
 
-                            }
-
-
-                            if (progressText) {
-
-                                progressText.textContent =
-                                    percentage + "%";
-
-                            }
+                    }
 
 
-                            if (
-                                loadedFrames ===
-                                TOTAL_FRAMES
-                            ) {
+                    loadedFrames++;
 
-                                resolve();
-
-                            }
-
-                        };
+                    updateLoaderProgress();
 
 
-                    image.onerror =
-                        function () {
-
-                            console.warn(
-                                "Could not load:",
-                                framePath(i)
-                            );
-
-
-                            /*
-                             * Continue loading even if
-                             * one frame fails.
-                             */
-
-                            loadedFrames++;
-
-
-                            const percentage =
-                                Math.round(
-                                    (
-                                        loadedFrames /
-                                        TOTAL_FRAMES
-                                    ) * 100
-                                );
-
-
-                            if (progressBar) {
-
-                                progressBar.style.width =
-                                    percentage + "%";
-
-                            }
-
-
-                            if (progressText) {
-
-                                progressText.textContent =
-                                    percentage + "%";
-
-                            }
-
-
-                            if (
-                                loadedFrames ===
-                                TOTAL_FRAMES
-                            ) {
-
-                                resolve();
-
-                            }
-
-                        };
-
-
-                    frames.push(image);
+                    resolve(success);
 
                 }
 
+
+                image.onload =
+                    async function () {
+
+                        /*
+                         * Ask browser to decode the image
+                         * before it is needed on canvas.
+                         */
+
+                        try {
+
+                            if (
+                                typeof image.decode ===
+                                "function"
+                            ) {
+
+                                await image.decode();
+
+                            }
+
+                        } catch (error) {
+
+                            /*
+                             * Decode errors should not
+                             * stop the entire animation.
+                             */
+
+                        }
+
+
+                        finish(true);
+
+                    };
+
+
+                image.onerror =
+                    function () {
+
+                        console.warn(
+                            "Could not load:",
+                            framePath(index + 1)
+                        );
+
+
+                        finish(false);
+
+                    };
+
+
+                image.src =
+                    framePath(index + 1);
+
             }
+        );
+
+    }
+
+
+    /* =====================================================
+       PRELOAD FRAMES
+       LIMITED CONCURRENCY
+    ===================================================== */
+
+    async function preloadFrames() {
+
+        let nextIndex = 0;
+
+
+        async function worker() {
+
+            while (true) {
+
+                const index =
+                    nextIndex++;
+
+
+                if (
+                    index >= TOTAL_FRAMES
+                ) {
+                    return;
+                }
+
+
+                await loadFrame(index);
+
+            }
+
+        }
+
+
+        const workers = [];
+
+
+        const workerCount =
+            Math.min(
+                LOAD_CONCURRENCY,
+                TOTAL_FRAMES
+            );
+
+
+        for (
+            let i = 0;
+            i < workerCount;
+            i++
+        ) {
+
+            workers.push(
+                worker()
+            );
+
+        }
+
+
+        await Promise.all(
+            workers
         );
 
     }
@@ -456,8 +590,7 @@
 
 
         /*
-         * Scroll hint disappears
-         * after the user starts scrolling.
+         * Scroll hint.
          */
 
         if (scrollHint) {
@@ -482,21 +615,24 @@
 
 
         /*
-         * Update storytelling text.
+         * Storytelling.
          */
 
-        updateStory(progress);
+        updateStory(
+            progress
+        );
 
 
         /*
-         * Start smooth frame animation.
+         * Start animation.
          */
 
         if (
             !animationRunning
         ) {
 
-            animationRunning = true;
+            animationRunning =
+                true;
 
             requestAnimationFrame(
                 animateFrame
@@ -518,8 +654,12 @@
             currentFrame;
 
 
+        /*
+         * Smooth interpolation.
+         */
+
         currentFrame +=
-            difference * 0.14;
+            difference * 0.16;
 
 
         if (
@@ -533,7 +673,9 @@
 
 
         drawFrame(
-            Math.round(currentFrame)
+            Math.round(
+                currentFrame
+            )
         );
 
 
@@ -564,21 +706,40 @@
 
     function hideStories() {
 
-        story1.classList.remove(
-            "visible"
-        );
+        if (story1) {
 
-        story2.classList.remove(
-            "visible"
-        );
+            story1.classList.remove(
+                "visible"
+            );
 
-        story3.classList.remove(
-            "visible"
-        );
+        }
 
-        story4.classList.remove(
-            "visible"
-        );
+
+        if (story2) {
+
+            story2.classList.remove(
+                "visible"
+            );
+
+        }
+
+
+        if (story3) {
+
+            story3.classList.remove(
+                "visible"
+            );
+
+        }
+
+
+        if (story4) {
+
+            story4.classList.remove(
+                "visible"
+            );
+
+        }
 
     }
 
@@ -612,9 +773,13 @@
             progress < 0.22
         ) {
 
-            story1.classList.add(
-                "visible"
-            );
+            if (story1) {
+
+                story1.classList.add(
+                    "visible"
+                );
+
+            }
 
         }
 
@@ -627,9 +792,13 @@
             progress < 0.48
         ) {
 
-            story2.classList.add(
-                "visible"
-            );
+            if (story2) {
+
+                story2.classList.add(
+                    "visible"
+                );
+
+            }
 
         }
 
@@ -642,9 +811,13 @@
             progress < 0.72
         ) {
 
-            story3.classList.add(
-                "visible"
-            );
+            if (story3) {
+
+                story3.classList.add(
+                    "visible"
+                );
+
+            }
 
         }
 
@@ -655,9 +828,13 @@
 
         else {
 
-            story4.classList.add(
-                "visible"
-            );
+            if (story4) {
+
+                story4.classList.add(
+                    "visible"
+                );
+
+            }
 
         }
 
@@ -668,7 +845,8 @@
        SCROLL EVENT
     ===================================================== */
 
-    let scrollTicking = false;
+    let scrollTicking =
+        false;
 
 
     window.addEventListener(
@@ -711,7 +889,20 @@
         "resize",
         function () {
 
-            resizeCanvas();
+            clearTimeout(
+                resizeTimer
+            );
+
+
+            resizeTimer =
+                setTimeout(
+                    function () {
+
+                        resizeCanvas();
+
+                    },
+                    100
+                );
 
         }
     );
@@ -731,10 +922,28 @@
 
 
         /*
-         * Load all 240 images.
+         * Start progress at 0%.
+         */
+
+        loadedFrames = 0;
+
+        updateLoaderProgress();
+
+
+        /*
+         * Load all frames using
+         * limited concurrency.
          */
 
         await preloadFrames();
+
+
+        /*
+         * Loading finished.
+         */
+
+        loadingFinished =
+            true;
 
 
         /*
@@ -747,6 +956,26 @@
 
 
         drawFrame(0);
+
+
+        /*
+         * Complete progress.
+         */
+
+        if (progressBar) {
+
+            progressBar.style.width =
+                "100%";
+
+        }
+
+
+        if (progressText) {
+
+            progressText.textContent =
+                "100%";
+
+        }
 
 
         /*
@@ -766,9 +995,13 @@
          * Show first story.
          */
 
-        story1.classList.add(
-            "visible"
-        );
+        if (story1) {
+
+            story1.classList.add(
+                "visible"
+            );
+
+        }
 
 
         /*
@@ -779,6 +1012,10 @@
 
     }
 
+
+    /* =====================================================
+       START
+    ===================================================== */
 
     initialize();
 
