@@ -9,12 +9,19 @@
 
     const TOTAL_FRAMES = 240;
 
-    const FRAME_FOLDER = "/static/frames/";
+    const FRAME_FOLDER =
+        "/static/frames/";
 
-    const FRAME_PREFIX = "ezgif-frame-";
+    const FRAME_PREFIX =
+        "ezgif-frame-";
 
-    // Number of images loaded simultaneously.
-    // 6-8 is usually a good balance.
+
+    /*
+     * Number of images allowed to load at the same time.
+     *
+     * This prevents the browser from requesting all
+     * 240 images simultaneously.
+     */
     const LOAD_CONCURRENCY = 8;
 
 
@@ -40,6 +47,7 @@
     const scrollHint =
         document.getElementById("scrollHint");
 
+
     const story1 =
         document.getElementById("story1");
 
@@ -53,9 +61,9 @@
         document.getElementById("story4");
 
 
-    /* =====================================================
-       SAFETY CHECK
-    ===================================================== */
+    /*
+     * Stop if required elements are missing.
+     */
 
     if (
         !experience ||
@@ -66,21 +74,23 @@
 
 
     const ctx =
-        canvas.getContext(
-            "2d",
-            {
-                alpha: true,
-                desynchronized: true
-            }
-        );
+        canvas.getContext("2d");
 
 
     /* =====================================================
        STATE
     ===================================================== */
 
+    /*
+     * Fixed-size array.
+     *
+     * This is important because frame 1 goes into
+     * frames[0], frame 2 into frames[1], etc.
+     */
+
     const frames =
         new Array(TOTAL_FRAMES);
+
 
     let loadedFrames = 0;
 
@@ -92,9 +102,107 @@
 
     let lastProgress = -1;
 
-    let resizeTimer = null;
+    let lastDrawnFrame = -1;
 
-    let loadingFinished = false;
+    let nextFrameToLoad = 0;
+
+
+    /* =====================================================
+       SCROLL LOCK
+    ===================================================== */
+
+    /*
+     * Prevent the user from scrolling while the
+     * heart animation is loading.
+     */
+
+    function lockPageScroll() {
+
+        document.documentElement.classList.add(
+            "loading-lock"
+        );
+
+        document.body.classList.add(
+            "loading-lock"
+        );
+
+        /*
+         * Prevent keyboard scrolling.
+         */
+
+        window.addEventListener(
+            "keydown",
+            preventScrollKeys,
+            {
+                passive: false
+            }
+        );
+    }
+
+
+    /*
+     * Allow scrolling again after loading.
+     */
+
+    function unlockPageScroll() {
+
+        document.documentElement.classList.remove(
+            "loading-lock"
+        );
+
+        document.body.classList.remove(
+            "loading-lock"
+        );
+
+        window.removeEventListener(
+            "keydown",
+            preventScrollKeys
+        );
+    }
+
+
+    /*
+     * Prevent keyboard keys such as:
+     *
+     * ArrowUp
+     * ArrowDown
+     * PageUp
+     * PageDown
+     * Home
+     * End
+     * Space
+     */
+
+    function preventScrollKeys(event) {
+
+        const scrollKeys = [
+            "ArrowUp",
+            "ArrowDown",
+            "ArrowLeft",
+            "ArrowRight",
+            "PageUp",
+            "PageDown",
+            "Home",
+            "End",
+            " "
+        ];
+
+
+        if (
+            scrollKeys.includes(event.key)
+        ) {
+            event.preventDefault();
+        }
+    }
+
+
+    /*
+     * Lock immediately.
+     *
+     * This happens before image loading starts.
+     */
+
+    lockPageScroll();
 
 
     /* =====================================================
@@ -107,6 +215,7 @@
             String(number)
                 .padStart(3, "0");
 
+
         return (
             FRAME_FOLDER +
             FRAME_PREFIX +
@@ -117,43 +226,19 @@
 
 
     /* =====================================================
-       UPDATE LOADER
-    ===================================================== */
-
-    function updateLoaderProgress() {
-
-        const percentage =
-            Math.round(
-                (
-                    loadedFrames /
-                    TOTAL_FRAMES
-                ) * 100
-            );
-
-
-        if (progressBar) {
-
-            progressBar.style.width =
-                percentage + "%";
-
-        }
-
-
-        if (progressText) {
-
-            progressText.textContent =
-                percentage + "%";
-
-        }
-
-    }
-
-
-    /* =====================================================
        RESIZE CANVAS
     ===================================================== */
 
+    let resizeTimeout = null;
+
+
     function resizeCanvas() {
+
+        /*
+         * Limit DPR.
+         *
+         * Very high DPR can make canvas drawing expensive.
+         */
 
         const dpr =
             Math.min(
@@ -173,6 +258,7 @@
             Math.round(
                 width * dpr
             );
+
 
         canvas.height =
             Math.round(
@@ -200,7 +286,32 @@
         drawFrame(
             Math.round(currentFrame)
         );
+    }
 
+
+    /*
+     * Debounce resize.
+     *
+     * This prevents many canvas recalculations when
+     * the browser is continuously being resized.
+     */
+
+    function handleResize() {
+
+        clearTimeout(
+            resizeTimeout
+        );
+
+
+        resizeTimeout =
+            setTimeout(
+                function () {
+
+                    resizeCanvas();
+
+                },
+                100
+            );
     }
 
 
@@ -209,6 +320,10 @@
     ===================================================== */
 
     function drawFrame(index) {
+
+        /*
+         * Make sure index is valid.
+         */
 
         if (
             index < 0 ||
@@ -223,8 +338,10 @@
 
 
         /*
-         * If requested frame has not loaded yet,
-         * use the nearest available frame.
+         * If requested frame hasn't loaded yet,
+         * find the closest previously loaded frame.
+         *
+         * This prevents the animation from becoming blank.
          */
 
         if (
@@ -233,44 +350,49 @@
             !image.naturalWidth
         ) {
 
-            let fallbackIndex = index;
-
-
-            /*
-             * Search backwards first.
-             */
-
-            while (
-                fallbackIndex > 0 &&
-                (
-                    !frames[fallbackIndex] ||
-                    !frames[fallbackIndex].complete ||
-                    !frames[fallbackIndex].naturalWidth
-                )
+            for (
+                let i = index;
+                i >= 0;
+                i--
             ) {
 
-                fallbackIndex--;
+                if (
+                    frames[i] &&
+                    frames[i].complete &&
+                    frames[i].naturalWidth
+                ) {
 
+                    image =
+                        frames[i];
+
+                    break;
+                }
             }
+        }
 
 
-            image =
-                frames[fallbackIndex];
+        /*
+         * If no frame is available yet,
+         * don't draw anything.
+         */
+
+        if (
+            !image ||
+            !image.complete ||
+            !image.naturalWidth
+        ) {
+            return;
+        }
 
 
-            /*
-             * If nothing is available yet,
-             * don't draw anything.
-             */
+        /*
+         * Don't redraw exactly the same frame.
+         */
 
-            if (
-                !image ||
-                !image.complete ||
-                !image.naturalWidth
-            ) {
-                return;
-            }
-
+        if (
+            index === lastDrawnFrame
+        ) {
+            return;
         }
 
 
@@ -293,6 +415,7 @@
             image.naturalWidth /
             image.naturalHeight;
 
+
         const screenRatio =
             width /
             height;
@@ -303,9 +426,9 @@
         let drawHeight;
 
 
-        /*
-         * COVER
-         */
+        /* =================================================
+           COVER
+        ================================================= */
 
         if (
             imageRatio > screenRatio
@@ -326,7 +449,6 @@
             drawHeight =
                 width /
                 imageRatio;
-
         }
 
 
@@ -352,11 +474,44 @@
             drawHeight
         );
 
+
+        lastDrawnFrame =
+            index;
     }
 
 
     /* =====================================================
-       LOAD SINGLE FRAME
+       UPDATE LOADING PROGRESS
+    ===================================================== */
+
+    function updateLoadingProgress() {
+
+        const percentage =
+            Math.round(
+                (
+                    loadedFrames /
+                    TOTAL_FRAMES
+                ) * 100
+            );
+
+
+        if (progressBar) {
+
+            progressBar.style.width =
+                percentage + "%";
+        }
+
+
+        if (progressText) {
+
+            progressText.textContent =
+                percentage + "%";
+        }
+    }
+
+
+    /* =====================================================
+       LOAD ONE FRAME
     ===================================================== */
 
     function loadFrame(index) {
@@ -371,72 +526,59 @@
                 image.decoding =
                     "async";
 
+
+                /*
+                 * Tell the browser this is an eager
+                 * image because we need it for animation.
+                 */
+
                 image.loading =
                     "eager";
-
-
-                let completed =
-                    false;
-
-
-                function finish(success) {
-
-                    if (completed) {
-                        return;
-                    }
-
-                    completed = true;
-
-
-                    if (success) {
-
-                        frames[index] =
-                            image;
-
-                    }
-
-
-                    loadedFrames++;
-
-                    updateLoaderProgress();
-
-
-                    resolve(success);
-
-                }
 
 
                 image.onload =
                     async function () {
 
                         /*
-                         * Ask browser to decode the image
-                         * before it is needed on canvas.
+                         * Decode the image when possible.
+                         *
+                         * This helps reduce the chance of
+                         * decode work happening during scrolling.
                          */
 
-                        try {
+                        if (
+                            typeof image.decode ===
+                            "function"
+                        ) {
 
-                            if (
-                                typeof image.decode ===
-                                "function"
-                            ) {
+                            try {
 
                                 await image.decode();
 
+                            } catch (error) {
+
+                                /*
+                                 * Decode failure does not
+                                 * mean the image cannot be drawn.
+                                 */
+
                             }
-
-                        } catch (error) {
-
-                            /*
-                             * Decode errors should not
-                             * stop the entire animation.
-                             */
-
                         }
 
 
-                        finish(true);
+                        frames[index] =
+                            image;
 
+
+                        loadedFrames++;
+
+
+                        updateLoadingProgress();
+
+
+                        resolve(
+                            true
+                        );
                     };
 
 
@@ -449,51 +591,74 @@
                         );
 
 
-                        finish(false);
+                        /*
+                         * Keep the loader moving even if
+                         * one image fails.
+                         */
 
+                        loadedFrames++;
+
+
+                        updateLoadingProgress();
+
+
+                        resolve(
+                            false
+                        );
                     };
 
 
                 image.src =
                     framePath(index + 1);
-
             }
         );
-
     }
 
 
     /* =====================================================
-       PRELOAD FRAMES
+       PRELOAD ALL FRAMES
        LIMITED CONCURRENCY
     ===================================================== */
 
     async function preloadFrames() {
 
-        let nextIndex = 0;
-
+        /*
+         * Each worker loads one frame at a time.
+         */
 
         async function worker() {
 
             while (true) {
 
-                const index =
-                    nextIndex++;
+                /*
+                 * Get the next frame number.
+                 */
 
+                const index =
+                    nextFrameToLoad++;
+
+
+                /*
+                 * Stop when all frames have been assigned.
+                 */
 
                 if (
                     index >= TOTAL_FRAMES
                 ) {
-                    return;
+                    break;
                 }
 
 
-                await loadFrame(index);
-
+                await loadFrame(
+                    index
+                );
             }
-
         }
 
+
+        /*
+         * Create limited number of workers.
+         */
 
         const workers = [];
 
@@ -514,14 +679,16 @@
             workers.push(
                 worker()
             );
-
         }
 
+
+        /*
+         * Wait until every worker has finished.
+         */
 
         await Promise.all(
             workers
         );
-
     }
 
 
@@ -545,7 +712,6 @@
         ) {
 
             return 0;
-
         }
 
 
@@ -565,7 +731,6 @@
 
 
         return progress;
-
     }
 
 
@@ -580,8 +745,8 @@
 
 
         /*
-         * Convert scroll position
-         * to one of the 240 frames.
+         * Convert scroll position into
+         * one of the 240 frames.
          */
 
         targetFrame =
@@ -590,7 +755,7 @@
 
 
         /*
-         * Scroll hint.
+         * Hide scroll hint after scrolling starts.
          */
 
         if (scrollHint) {
@@ -608,14 +773,12 @@
                 scrollHint.classList.remove(
                     "hidden"
                 );
-
             }
-
         }
 
 
         /*
-         * Storytelling.
+         * Update story.
          */
 
         updateStory(
@@ -634,12 +797,11 @@
             animationRunning =
                 true;
 
+
             requestAnimationFrame(
                 animateFrame
             );
-
         }
-
     }
 
 
@@ -659,7 +821,8 @@
          */
 
         currentFrame +=
-            difference * 0.16;
+            difference *
+            0.16;
 
 
         if (
@@ -668,7 +831,6 @@
 
             currentFrame =
                 targetFrame;
-
         }
 
 
@@ -694,9 +856,7 @@
 
             animationRunning =
                 false;
-
         }
-
     }
 
 
@@ -711,7 +871,6 @@
             story1.classList.remove(
                 "visible"
             );
-
         }
 
 
@@ -720,7 +879,6 @@
             story2.classList.remove(
                 "visible"
             );
-
         }
 
 
@@ -729,7 +887,6 @@
             story3.classList.remove(
                 "visible"
             );
-
         }
 
 
@@ -738,13 +895,15 @@
             story4.classList.remove(
                 "visible"
             );
-
         }
-
     }
 
 
     function updateStory(progress) {
+
+        /*
+         * Avoid unnecessary DOM updates.
+         */
 
         if (
             Math.abs(
@@ -754,7 +913,6 @@
         ) {
 
             return;
-
         }
 
 
@@ -778,9 +936,7 @@
                 story1.classList.add(
                     "visible"
                 );
-
             }
-
         }
 
 
@@ -797,9 +953,7 @@
                 story2.classList.add(
                     "visible"
                 );
-
             }
-
         }
 
 
@@ -816,9 +970,7 @@
                 story3.classList.add(
                     "visible"
                 );
-
             }
-
         }
 
 
@@ -833,11 +985,8 @@
                 story4.classList.add(
                     "visible"
                 );
-
             }
-
         }
-
     }
 
 
@@ -853,6 +1002,23 @@
         "scroll",
         function () {
 
+            /*
+             * Safety check:
+             *
+             * If the loader is still active,
+             * don't process scrolling.
+             */
+
+            if (
+                document.body.classList.contains(
+                    "loading-lock"
+                )
+            ) {
+
+                return;
+            }
+
+
             if (
                 !scrollTicking
             ) {
@@ -864,16 +1030,13 @@
 
                         scrollTicking =
                             false;
-
                     }
                 );
 
 
                 scrollTicking =
                     true;
-
             }
-
         },
         {
             passive: true
@@ -882,29 +1045,12 @@
 
 
     /* =====================================================
-       RESIZE
+       RESIZE EVENT
     ===================================================== */
 
     window.addEventListener(
         "resize",
-        function () {
-
-            clearTimeout(
-                resizeTimer
-            );
-
-
-            resizeTimer =
-                setTimeout(
-                    function () {
-
-                        resizeCanvas();
-
-                    },
-                    100
-                );
-
-        }
+        handleResize
     );
 
 
@@ -915,6 +1061,15 @@
     async function initialize() {
 
         /*
+         * IMPORTANT:
+         *
+         * Lock scrolling before doing anything else.
+         */
+
+        lockPageScroll();
+
+
+        /*
          * Prepare canvas.
          */
 
@@ -922,101 +1077,111 @@
 
 
         /*
-         * Start progress at 0%.
+         * Reset loading state.
          */
 
         loadedFrames = 0;
 
-        updateLoaderProgress();
+        nextFrameToLoad = 0;
 
+        lastDrawnFrame = -1;
 
-        /*
-         * Load all frames using
-         * limited concurrency.
-         */
-
-        await preloadFrames();
-
-
-        /*
-         * Loading finished.
-         */
-
-        loadingFinished =
-            true;
-
-
-        /*
-         * First frame.
-         */
-
-        currentFrame = 0;
-
-        targetFrame = 0;
-
-
-        drawFrame(0);
-
-
-        /*
-         * Complete progress.
-         */
 
         if (progressBar) {
 
             progressBar.style.width =
-                "100%";
-
+                "0%";
         }
 
 
         if (progressText) {
 
             progressText.textContent =
-                "100%";
-
+                "0%";
         }
 
 
         /*
-         * Remove loading screen.
+         * Load all 240 frames.
+         *
+         * Loading happens with limited concurrency,
+         * rather than requesting all 240 at once.
          */
 
-        if (loader) {
-
-            loader.classList.add(
-                "loaded"
-            );
-
-        }
+        await preloadFrames();
 
 
-        /*
-         * Show first story.
-         */
+        /* =================================================
+           FIRST FRAME
+        ================================================= */
+
+        currentFrame = 0;
+
+        targetFrame = 0;
+
+        lastDrawnFrame = -1;
+
+
+        drawFrame(0);
+
+
+        /* =================================================
+           SHOW FIRST STORY
+        ================================================= */
+
+        hideStories();
+
 
         if (story1) {
 
             story1.classList.add(
                 "visible"
             );
+        }
 
+
+        /* =================================================
+           INITIAL SCROLL STATE
+        ================================================= */
+
+        updateScroll();
+
+
+        /* =================================================
+           REMOVE LOADING SCREEN
+        ================================================= */
+
+        if (loader) {
+
+            loader.classList.add(
+                "loaded"
+            );
         }
 
 
         /*
-         * Set initial state.
+         * Wait for the loader's fade-out animation.
+         *
+         * Your existing loader uses an approximately
+         * 0.8 second transition.
          */
 
-        updateScroll();
+        setTimeout(
+            function () {
 
+                unlockPageScroll();
+
+            },
+            800
+        );
     }
 
 
     /* =====================================================
        START
-    ===================================================== */
+    ================================================= */
 
     initialize();
+
 
 })();
